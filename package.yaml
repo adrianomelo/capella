@@ -27,8 +27,11 @@ dependencies:
 - warp
 - rio
 - aeson
+- utf8-string
+- bytestring
 - bytestring-lexing
 - http-types
+- binary
 
 library:
   source-dirs: src

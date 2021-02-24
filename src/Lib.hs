@@ -14,6 +14,8 @@ import           Network.HTTP.Types                   (hContentType, status200,
 import           Network.Wai                          (Application, Request,
                                                        Response, pathInfo,
                                                        queryString,
+                                                       rawPathInfo,
+                                                       responseFile,
                                                        requestMethod,
                                                        responseBuilder)
 import           Network.Wai.Handler.Warp             (run)
@@ -25,6 +27,12 @@ import           RIO
 import qualified RIO.Map                              as Map
 
 import qualified Network.Wai.Middleware.Prometheus as P
+
+import qualified Data.List as List
+import System.IO
+import qualified Data.ByteString.Lazy.UTF8  as BLU
+import qualified Data.Binary.Builder as Builder
+import qualified Data.Binary
 
 -- Type synonyms for nicer signatures below
 type Name = Text
@@ -39,73 +47,18 @@ notFound = responseBuilder status404 [] "Not found"
 badRequest :: Response
 badRequest = responseBuilder status405 [] "Bad request method"
 
--- | Build a successful JSON response
-jsonResponse :: ToJSON a => a -> Response
-jsonResponse
-  = responseBuilder status200 [(hContentType, "application/json")]
-  . fromEncoding . toEncoding
-
-peopleApp :: PeopleVar -> Application
-peopleApp peopleVar req send = do
+simpleImageApp :: PeopleVar -> Application
+simpleImageApp var req send = do
   response <-
     case pathInfo req of
-      ["people"] ->
-        case requestMethod req of
-          "GET"  -> getPeopleResponse peopleVar
-          "POST" -> postPeopleResponse peopleVar req
-          _      -> pure badRequest
-      ["person", name] ->
-        case requestMethod req of
-          "GET" -> getPersonResponse peopleVar name
-          "PUT" -> do
-            let ageParam = lookup "age" $ queryString req
-            putPersonResponse peopleVar name ageParam
-      _ -> pure notFound
+      [path] -> pure $ responseFile status200 [("Cache-Control", "no-cache")] "small.gif" Nothing
+
+      _ -> pure badRequest
+
   send response
-
-getPeopleResponse :: PeopleVar -> IO Response
-getPeopleResponse peopleVar = do
-  people <- atomically $ readTVar peopleVar
-  pure $ jsonResponse $ Map.keys people
-
-postPeopleResponse :: PeopleVar -> Request -> IO Response
-postPeopleResponse peopleVar req = do
-  (params, _) <- parseRequestBody lbsBackEnd req
-  let mpair = do
-        nameBS <- lookup "name" params
-        name <- either (const Nothing) Just $ decodeUtf8' nameBS
-        ageBS <- lookup "age" params
-        (age, "") <- Lex.readDecimal ageBS
-        Just (name, age)
-  case mpair of
-    Just (name, age) -> do
-      atomically $ modifyTVar' peopleVar $ Map.insert name age
-      pure $ responseBuilder status201 [] ""
-    Nothing -> pure $ responseBuilder status400 [] "Invalid parameters"
-
-getPersonResponse :: PeopleVar -> Name -> IO Response
-getPersonResponse peopleVar name = do
-  people <- atomically $ readTVar peopleVar
-  case Map.lookup name people of
-    Nothing -> pure notFound
-    Just age -> pure $ jsonResponse $ object
-      [ "name" .= name
-      , "age" .= age
-      ]
-
-putPersonResponse :: PeopleVar -> Name -> Maybe (Maybe ByteString) -> IO Response
-putPersonResponse _ _ Nothing = pure $ responseBuilder status400 [] "No age parameter"
-putPersonResponse _ _ (Just Nothing) = pure $ responseBuilder status400 [] "Empty age parameter"
-putPersonResponse peopleVar name (Just (Just bs)) =
-  case Lex.readDecimal bs of
-    Just (age, "") -> do
-      atomically $ modifyTVar' peopleVar $ Map.insert name age
-      pure $ responseBuilder status201 [] ""
-    _ -> pure $ responseBuilder status400 [] "Invalid age parameter"
 
 someFunc :: IO ()
 someFunc = do
   peopleVar <- newTVarIO mempty
-  -- logStdout, autohead
-  run 8000 $ P.prometheus P.def { P.prometheusEndPoint = ["metrics"] } $ peopleApp peopleVar
+  run 8000 $ P.prometheus P.def { P.prometheusEndPoint = ["metrics"] } $ simpleImageApp peopleVar
 

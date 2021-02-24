@@ -33,9 +33,12 @@ library
   build-depends:
       aeson
     , base >=4.7 && <5
+    , binary
+    , bytestring
     , bytestring-lexing
     , http-types
     , rio
+    , utf8-string
     , wai
     , wai-extra
     , wai-middleware-prometheus
@@ -52,10 +55,13 @@ executable capella-exe
   build-depends:
       aeson
     , base >=4.7 && <5
+    , binary
+    , bytestring
     , bytestring-lexing
     , capella
     , http-types
     , rio
+    , utf8-string
     , wai
     , wai-extra
     , wai-middleware-prometheus
@@ -73,10 +79,13 @@ test-suite capella-test
   build-depends:
       aeson
     , base >=4.7 && <5
+    , binary
+    , bytestring
     , bytestring-lexing
     , capella
     , http-types
     , rio
+    , utf8-string
     , wai
     , wai-extra
     , wai-middleware-prometheus
