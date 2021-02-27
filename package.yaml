@@ -32,6 +32,9 @@ dependencies:
 - bytestring-lexing
 - http-types
 - binary
+- uuid
+- text
+- network
 
 library:
   source-dirs: src

@@ -45,7 +45,6 @@ packages:
 extra-deps:
 - wai-middleware-prometheus-1.0.0@sha256:1625792914fb2139f005685be8ce519111451cfb854816e430fbf54af46238b4,1314
 
-
 # Override default flag values for local packages and extra-deps
 # flags: {}
 
@@ -69,3 +68,4 @@ extra-deps:
 #
 # Allow a newer minor version of GHC than the snapshot specifies
 # compiler-check: newer-minor
+

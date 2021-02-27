@@ -37,8 +37,11 @@ library
     , bytestring
     , bytestring-lexing
     , http-types
+    , network
     , rio
+    , text
     , utf8-string
+    , uuid
     , wai
     , wai-extra
     , wai-middleware-prometheus
@@ -60,8 +63,11 @@ executable capella-exe
     , bytestring-lexing
     , capella
     , http-types
+    , network
     , rio
+    , text
     , utf8-string
+    , uuid
     , wai
     , wai-extra
     , wai-middleware-prometheus
@@ -84,8 +90,11 @@ test-suite capella-test
     , bytestring-lexing
     , capella
     , http-types
+    , network
     , rio
+    , text
     , utf8-string
+    , uuid
     , wai
     , wai-extra
     , wai-middleware-prometheus
