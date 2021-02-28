@@ -145,8 +145,8 @@ roundTrip :: Region -- ^ Region to operate in.
          -> Text -- ^ Contents of the messages to send.
          -> IO ()
 roundTrip r name message = do
-    --lgr <- newLogger Debug stdout
-    env <- newEnv Discover -- <&> set envLogger lgr
+    lgr <- newLogger Debug stdout
+    env <- newEnv Discover <&> set envLogger lgr
 
     runResourceT . runAWST env . within r $ do
         url <- view gqursQueueURL <$> send (getQueueURL name)
