@@ -28,13 +28,20 @@ dependencies:
 - rio
 - aeson
 - utf8-string
-- bytestring
-- bytestring-lexing
+#- bytestring
+#- bytestring-lexing
 - http-types
 - binary
 - uuid
 - text
 - network
+- amazonka
+- amazonka-sns
+- amazonka-sqs
+- lens
+- transformers
+- sockaddr
+- string-conversions
 
 library:
   source-dirs: src

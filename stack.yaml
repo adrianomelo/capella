@@ -44,6 +44,9 @@ packages:
 
 extra-deps:
 - wai-middleware-prometheus-1.0.0@sha256:1625792914fb2139f005685be8ce519111451cfb854816e430fbf54af46238b4,1314
+- amazonka-1.6.1@sha256:f58b63e83876f93aa03c54e54b3eb8ba9358af93819d41f4a5a8f8b7d8b8399c,3544
+- unliftio-core-0.1.2.0@sha256:7f9b48adef8e36da0202e6e70a733a5e210263ed4177c93e47a4b3f89694194b,1081
+- sockaddr-0.0.0@sha256:abd855de908f0b846409335d60ffc69b279ff869f9575fb85934f4fe0d378867,787
 
 # Override default flag values for local packages and extra-deps
 # flags: {}
@@ -69,3 +72,4 @@ extra-deps:
 # Allow a newer minor version of GHC than the snapshot specifies
 # compiler-check: newer-minor
 
+allow-newer: true
