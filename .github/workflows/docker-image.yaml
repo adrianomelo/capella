@@ -1,0 +1,17 @@
+name: Push docker image
+
+on:
+  push
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+    - run: echo "${{ secrets.docker_password }}" | docker login -u ${{ secrets.docker_login }} --password-stdin
+    - name: Build image
+      # working-directory: ./backend
+      run: docker build . --file Dockerfile --tag adrianomelo/capella:commit-${{ github.sha }} --tag adrianomelo/capella:latest
+    - run: docker push adrianomelo/capella:commit-${{ github.sha }}
+    - run: docker push adrianomelo/capella:latest

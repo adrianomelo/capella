@@ -1,11 +1,14 @@
-FROM haskell:8 as builder
+FROM haskell:9.4.4-slim-buster as builder
 
 WORKDIR /app
 
 COPY . .
 
-RUN apt-get update && apt-get install && stack setup && stack install && cp `stack path --local-bin`/capella-exe /app/capella-exe
-
+RUN apt-get update \
+    && apt-get install \
+    && cabal update \
+    && cabal build \
+    && cabal install --installdir=/app --install-method=copy
 
 FROM debian:buster-slim
 
@@ -15,9 +18,9 @@ CMD ["/app/capella-exe"]
 
 EXPOSE 8000
 
-RUN apt-get update && apt-get install libgmp-dev netbase libstdc++6 ca-certificates libc-bin -y
+RUN apt-get update \
+    && apt-get install libgmp-dev netbase libstdc++6 ca-certificates libc-bin -y
 
-COPY . .
 
 COPY --from=builder /app/capella-exe /app/capella-exe
-
+COPY --from=builder /app/small.gif /app/small.gif
