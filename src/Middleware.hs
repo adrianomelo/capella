@@ -12,7 +12,6 @@ module Middleware
   , ignoreRawResponses
   , instrumentApp
   , instrumentIO
-  , observeSeconds
   , metricsApp
   ) where
 
@@ -27,6 +26,7 @@ import qualified Network.Wai as Wai
 import qualified Network.Wai.Internal as Wai (Response(ResponseRaw))
 import qualified Prometheus as Prom
 import System.Clock (Clock(..), TimeSpec, diffTimeSpec, getTime, toNanoSecs)
+import Prometheus (incCounter)
 
 
 -- | Settings that control the behavior of the Prometheus middleware.
@@ -51,13 +51,6 @@ instance Default.Default PrometheusSettings where
     ,   prometheusInstrumentApp        = True
     ,   prometheusInstrumentPrometheus = True
     }
-
-{-# NOINLINE requestLatency #-}
-requestLatency :: Prom.Vector Prom.Label4 Prom.Histogram
-requestLatency = Prom.unsafeRegister $ Prom.vector ("handler", "method", "status_code", "path")
-                                     $ Prom.histogram info Prom.defaultBuckets
-    where info = Prom.Info "http_request_duration_seconds"
-                           "The HTTP request latencies in seconds."
 
 -- | This function is used to populate the @handler@ label of all Prometheus metrics recorded by this library.
 --
@@ -90,8 +83,25 @@ instrumentHandlerValueWithFilter resFilter f app req respond = do
         let method = Just $ decodeUtf8 (Wai.requestMethod req)
         let status = Just $ T.pack (show (HTTP.statusCode (Wai.responseStatus res')))
         let path = Just $ intercalate "/" (Wai.pathInfo req)
-        observeSeconds (f req) method status path start end
+        let referer = decodeUtf8 <$> Wai.requestHeaderReferer req
+        let userAgent = decodeUtf8 <$> Wai.requestHeaderUserAgent req
+
+        observePageViews status path referer
     respond res
+
+{-# NOINLINE pageViewMetric #-}
+pageViewMetric :: Prom.Vector Prom.Label3 Prom.Counter
+pageViewMetric = Prom.unsafeRegister $ Prom.vector ("status_code", "path", "referer")
+                                     $ Prom.counter info
+    where info = Prom.Info "http_page_views_total"
+                           "Total number of times a page was viewed."
+
+observePageViews :: Maybe Text   -- ^ status
+               -> Maybe Text   -- ^ path
+               -> Maybe Text   -- ^ referer
+               -> IO ()
+observePageViews status path referer = do
+    Prom.withLabel pageViewMetric (fromMaybe "" status, fromMaybe "" path, fromMaybe "" referer) Prom.incCounter
 
 -- | 'Wai.ResponseRaw' values have two parts: an action that can be executed to construct a
 -- 'Wai.Response', and a pure "backup" 'Wai.Response' in case the computation fails.  Since
@@ -140,23 +150,8 @@ instrumentIO label io = do
     start  <- getTime Monotonic
     result <- io
     end    <- getTime Monotonic
-    observeSeconds label Nothing Nothing Nothing start end
+    observePageViews Nothing Nothing Nothing
     return result
-
--- | Record an event to the middleware metric.
-observeSeconds :: Text         -- ^ handler label
-               -> Maybe Text   -- ^ method
-               -> Maybe Text   -- ^ status
-               -> Maybe Text   -- ^ path
-               -> TimeSpec     -- ^ start time
-               -> TimeSpec     -- ^ end time
-               -> IO ()
-observeSeconds handler method status path start end = do
-    let latency :: Double
-        latency = fromRational $ toRational (toNanoSecs (end `diffTimeSpec` start) % 1000000000)
-    Prom.withLabel requestLatency
-                   (handler, fromMaybe "" method, fromMaybe "" status, fromMaybe "" path)
-                   (flip Prom.observe latency)
 
 -- | Expose Prometheus metrics and instrument an application with some basic
 -- metrics (e.g. request latency).
