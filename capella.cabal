@@ -39,6 +39,7 @@ library
     , http-types
     , prometheus-client
     , text
+    , ua-parser
     , utf8-string
     , uuid
     , wai

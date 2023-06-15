@@ -16,7 +16,7 @@ module Middleware
   ) where
 
 import qualified Data.Default as Default
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, fromJust)
 import Data.Ratio ((%))
 import Data.Text (Text,intercalate)
 import qualified Data.Text as T
@@ -27,6 +27,8 @@ import qualified Network.Wai.Internal as Wai (Response(ResponseRaw))
 import qualified Prometheus as Prom
 import System.Clock (Clock(..), TimeSpec, diffTimeSpec, getTime, toNanoSecs)
 import Prometheus (incCounter)
+import Web.UAParser ( parseUA, parseOS, parseDev, osrVersion, uarVersion, UAResult (uarFamily), OSResult (osrFamily), DevResult (..) )
+import qualified Network.HTTP.Types as Wai
 
 
 -- | Settings that control the behavior of the Prometheus middleware.
@@ -52,6 +54,12 @@ instance Default.Default PrometheusSettings where
     ,   prometheusInstrumentPrometheus = True
     }
 
+responseFilter res
+  | isSuccessful = Just res
+  | otherwise = Nothing
+  where
+    isSuccessful = (== Wai.status200) . Wai.responseStatus $ res
+
 -- | This function is used to populate the @handler@ label of all Prometheus metrics recorded by this library.
 --
 -- If you use this function you will likely want to override the default value
@@ -64,7 +72,7 @@ instrumentHandlerValue ::
      (Wai.Request -> Text) -- ^ The function used to derive the "handler" value in Prometheus
   -> Wai.Application -- ^ The app to instrument
   -> Wai.Application -- ^ The instrumented app
-instrumentHandlerValue = instrumentHandlerValueWithFilter Just
+instrumentHandlerValue = instrumentHandlerValueWithFilter responseFilter
 
 -- | A more flexible variant of 'instrumentHandlerValue'.  The filter can change some
 -- responses, or drop others entirely.
@@ -74,34 +82,58 @@ instrumentHandlerValueWithFilter ::
   -> Wai.Application -- ^ The app to instrument
   -> Wai.Application -- ^ The instrumented app
 instrumentHandlerValueWithFilter resFilter f app req respond = do
-  start <- getTime Monotonic
+  -- start <- getTime Monotonic
   app req $ \res -> do
     case resFilter res of
       Nothing -> return ()
       Just res' -> do
-        end <- getTime Monotonic
+        -- end <- getTime Monotonic
         let method = Just $ decodeUtf8 (Wai.requestMethod req)
         let status = Just $ T.pack (show (HTTP.statusCode (Wai.responseStatus res')))
         let path = Just $ intercalate "/" (Wai.pathInfo req)
         let referer = decodeUtf8 <$> Wai.requestHeaderReferer req
-        let userAgent = decodeUtf8 <$> Wai.requestHeaderUserAgent req
+        let userAgentHeader = Wai.requestHeaderUserAgent req
 
-        observePageViews status path referer
+        let ua = parseUA =<< userAgentHeader
+        let uaFamily = uarFamily <$> ua
+        let uaVersion = uarVersion <$> ua
+
+        let os = parseOS =<< userAgentHeader
+        let osFamily = osrFamily <$> os
+        let osVersion = osrVersion <$> os
+        
+        observeUserAgents path uaFamily uaVersion osFamily osVersion
+        observePageViews path referer
     respond res
 
+{-# NOINLINE userAgentMetric #-}
+userAgentMetric :: Prom.Vector Prom.Label5 Prom.Counter
+userAgentMetric = Prom.unsafeRegister $ Prom.vector ("app", "user_agent", "user_agent_version", "operating_system", "operating_system_version")
+                                     $ Prom.counter info
+    where info = Prom.Info "http_user_agents_total"
+                           "Total number of times an user agent visited a page."
+
+observeUserAgents :: Maybe Text   -- ^ app
+               -> Maybe Text   -- ^ ua family
+               -> Maybe Text   -- ^ ua version
+               -> Maybe Text   -- ^ os family
+               -> Maybe Text   -- ^ os version
+               -> IO ()
+observeUserAgents app uaFamily uaVersion osFamily osVersion = do
+    Prom.withLabel userAgentMetric (fromMaybe "" app, fromMaybe "" uaFamily, fromMaybe "" uaVersion, fromMaybe "" osFamily, fromMaybe "" osVersion) Prom.incCounter
+
 {-# NOINLINE pageViewMetric #-}
-pageViewMetric :: Prom.Vector Prom.Label3 Prom.Counter
-pageViewMetric = Prom.unsafeRegister $ Prom.vector ("status_code", "path", "referer")
+pageViewMetric :: Prom.Vector Prom.Label2 Prom.Counter
+pageViewMetric = Prom.unsafeRegister $ Prom.vector ("app", "page")
                                      $ Prom.counter info
     where info = Prom.Info "http_page_views_total"
                            "Total number of times a page was viewed."
 
-observePageViews :: Maybe Text   -- ^ status
-               -> Maybe Text   -- ^ path
+observePageViews :: Maybe Text   -- ^ app
                -> Maybe Text   -- ^ referer
                -> IO ()
-observePageViews status path referer = do
-    Prom.withLabel pageViewMetric (fromMaybe "" status, fromMaybe "" path, fromMaybe "" referer) Prom.incCounter
+observePageViews app page = do
+    Prom.withLabel pageViewMetric (fromMaybe "" app, fromMaybe "" page) Prom.incCounter
 
 -- | 'Wai.ResponseRaw' values have two parts: an action that can be executed to construct a
 -- 'Wai.Response', and a pure "backup" 'Wai.Response' in case the computation fails.  Since
@@ -150,7 +182,7 @@ instrumentIO label io = do
     start  <- getTime Monotonic
     result <- io
     end    <- getTime Monotonic
-    observePageViews Nothing Nothing Nothing
+    observePageViews Nothing Nothing
     return result
 
 -- | Expose Prometheus metrics and instrument an application with some basic

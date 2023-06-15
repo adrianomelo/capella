@@ -17,15 +17,8 @@ import Network.Wai
       Request(pathInfo),
       Response )
 import Network.Wai.Handler.Warp (run)
--- import qualified Network.Wai.Middleware.Prometheus as P
 import qualified Middleware as P
 
--- data TrackingEvent = TrackingEvent
---   { uuid :: Text
---   , remote :: Text -- SockAddr
---   , referer :: Text
---   , userAgent :: Text
---   } deriving (Show, Generic)
 
 badRequest :: Network.Wai.Response
 badRequest = responseBuilder status405 [] "Bad request method"
@@ -37,15 +30,6 @@ validatePath (fileName:_) = maybe notUuid Right uuid
     uuid = fromText id
     notUuid = Left "File format not recognized"
     -- isGif = Text.isSuffixOf "gif" ext 
-
--- buildEvent :: Network.Wai.Request -> UUID.UUID -> TrackingEvent
--- buildEvent req uid =
---   TrackingEvent uuid remote referer userAgent
---   where
---     uuid = UUID.toText uid
---     remote = Text.pack $ showSockAddr $ remoteHost req
---     referer = Maybe.maybe "" Text.decodeUtf8 $ requestHeaderReferer req
---     userAgent = Maybe.maybe "" Text.decodeUtf8 $ requestHeaderUserAgent req
 
 simpleImageApp ::  Application
 simpleImageApp req send = do
